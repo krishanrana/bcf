@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Other
+wandb/
+saved_models/
+
 # C extensions
 *.so
 
