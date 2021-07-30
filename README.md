@@ -10,6 +10,6 @@ The only requirement is that you have [Conda installed](https://conda.io/project
 conda env create --file env_requirements.yml/
 ```
 
-For the manipuliabity maximising reacher tasks, you will require PyRep and CoppeliaSim. Head to the 
+For the manipuliabity maximising reacher task, you will additionally require PyRep and CoppeliaSim. Head to the 
 [PyRep github](https://github.com/stepjam/PyRep) page for installation instructions for this environment. 
 
