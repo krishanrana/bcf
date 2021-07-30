@@ -1,0 +1,27 @@
+{
+    "os": "Linux-5.4.0-71-generic-x86_64-with-debian-buster-sid",
+    "python": "3.6.7",
+    "heartbeatAt": "2021-07-30T03:55:58.108276",
+    "startedAt": "2021-07-30T03:55:57.141362",
+    "docker": null,
+    "gpu": "GeForce GTX 1080",
+    "gpu_count": 1,
+    "cpu_count": 12,
+    "cuda": null,
+    "args": [
+        "--task",
+        "manipulation"
+    ],
+    "state": "running",
+    "program": "sac.py",
+    "codePath": "sac.py",
+    "git": {
+        "remote": "https://github.com/krishanrana/bcf.git",
+        "commit": "f6b3912203c205e1a512575fdfc83c4297e56a44"
+    },
+    "email": "krishanrana100@gmail.com",
+    "root": "/home/krishan/work/bcf",
+    "host": "krishan",
+    "username": "krishan",
+    "executable": "/home/krishan/anaconda3/envs/bcf/bin/python"
+}
