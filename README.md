@@ -28,13 +28,13 @@ All results are logged using [Weights and Biases](https://wandb.ai). An account 
 
 ### Citation
 
-'''
-@article{rana2021bayesian,
-  title={Bayesian Controller Fusion: Leveraging Control Priors in Deep Reinforcement Learning for Robotics},
-  author={Rana, Krishan and Dasagi, Vibhavari and Haviland, Jesse and Talbot, Ben and Milford, Michael and S{\"u}nderhauf, Niko},
-  journal={arXiv preprint arXiv:2107.09822},
-  year={2021}
-}
-'''
+```
+  @article{rana2021bayesian,
+    title={Bayesian Controller Fusion: Leveraging Control Priors in Deep Reinforcement Learning for Robotics},
+    author={Rana, Krishan and Dasagi, Vibhavari and Haviland, Jesse and Talbot, Ben and Milford, Michael and S{\"u}nderhauf, Niko},
+    journal={arXiv preprint arXiv:2107.09822},
+    year={2021}
+  }
+```
 
 
