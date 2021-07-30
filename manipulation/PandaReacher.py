@@ -1,3 +1,4 @@
+
 from os.path import dirname, join, abspath
 from pyrep import PyRep
 from pyrep.robots.arms.panda import Panda
@@ -69,59 +70,7 @@ class ReacherEnv(object):
                                tPos-ePos])
 
     def reset(self):
-        # Get a random position within a cuboid and set the target position
-        #pos = list(np.random.uniform(POS_MIN, POS_MAX))
-
-        # Training set goals
-        # goals = [SE3(np.array([[ 0.84073806, -0.44629211, -0.30656624,  0.24963363],
-        #         [-0.53174833, -0.57392387, -0.62278014, -0.68898124],
-        #         [ 0.10199618,  0.68661106, -0.71983473,  0.44332631],
-        #         [ 0.        ,  0.        ,  0.        ,  1.        ]]), check=False), 
-        # SE3(np.array([[ 0.10110619, -0.10436278,  0.98938665,  0.47462406],
-        #         [-0.9572867 , -0.28098526,  0.0681869 , -0.16202907],
-        #         [ 0.27088689, -0.9540208 , -0.12831445,  0.80934663],
-        #         [ 0.        ,  0.        ,  0.        ,  1.        ]]), check=False), 
-        # SE3(np.array([[ 0.05411526, -0.78143632,  0.62163399,  0.10838407],
-        #         [-0.56873205,  0.48757787,  0.66242861,  0.88864022],
-        #         [-0.82074076, -0.38939067, -0.41804248,  0.50389342],
-        #         [ 0.        ,  0.        ,  0.        ,  1.        ]]), check=False), 
-        # SE3(np.array([[ 0.84245165,  0.45252368,  0.29239961, -0.05737615],
-        #         [ 0.51652456, -0.52402569, -0.67719972,  0.21326123],
-        #         [-0.153224  ,  0.7215396 , -0.67520591,  0.16504184],
-        #         [ 0.        ,  0.        ,  0.        ,  1.        ]]), check=False), 
-        # SE3(np.array([[ 0.70751599,  0.22229853,  0.67082374,  0.57837032],
-        #         [ 0.63700084, -0.61165997, -0.46915031,  0.19818329],
-        #         [ 0.3060246 ,  0.75924663, -0.57436356,  0.6470301 ],
-        #         [ 0.        ,  0.        ,  0.        ,  1.        ]]), check=False), 
-        # SE3(np.array([[ 0.15235587,  0.26497509, -0.95214279,  0.26712485],
-        #         [ 0.90608942,  0.34729487,  0.24163658,  0.54208645],
-        #         [ 0.39470198, -0.89954126, -0.18717871,  0.54609549],
-        #         [ 0.        ,  0.        ,  0.        ,  1.        ]]), check=False), 
-        # SE3(np.array([[ 0.72795795, -0.24767288,  0.63932415,  0.17450122],
-        #         [ 0.40465092,  0.90795042, -0.10901225,  0.12978233],
-        #         [-0.55347525,  0.33805944,  0.76117078,  1.24661989],
-        #         [ 0.        ,  0.        ,  0.        ,  1.        ]]), check=False), 
-        # SE3(np.array([[-0.03822127, -0.6053562 ,  0.79503648,  0.45318418],
-        #         [ 0.05406903, -0.79570515, -0.60326598, -0.26448151],
-        #         [ 0.99780543,  0.01992926,  0.06314389,  0.83183064],
-        #         [ 0.        ,  0.        ,  0.        ,  1.        ]]), check=False), 
-        # SE3(np.array([[-9.77519945e-01,  2.09534910e-01, -2.34494890e-02,
-        #             3.19499706e-01],
-        #         [-8.05274322e-04, -1.14927268e-01, -9.93373583e-01,
-        #         -3.27127880e-01],
-        #         [-2.10841430e-01, -9.71023607e-01,  1.12512429e-01,
-        #             2.54358977e-01],
-        #         [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,
-        #             1.00000000e+00]]), check=False)]
-
         
-        #self.targ = SE3(0,0,0)
-
-
-        #self.targ = self._find_pose()    
-        #self.targ = goals[i]
-        #self.pos = self.targ.t
-        #self.rot = self.targ.eul('deg')
         self.pos = list(np.random.uniform(POS_MIN, POS_MAX))
         self.rot = list(np.deg2rad(np.random.uniform(ANG_MIN, ANG_MAX)))
     
@@ -161,20 +110,14 @@ class ReacherEnv(object):
         return dist
 
     def step(self, action):
-        # print(action)
         self.agent.set_joint_target_velocities(action)  # Execute action on arm
-        # self.gripper.actuate(action[-1])
         self.pr.step()  # Step the physics simulation
 
         self.ep_step += 1
         
         # Generate reward
         reward = self.gen_reward_sparse()
-        #reward = self.gen_reward_sparse()
 
-        #input('c')
-
-        # print(reward)
         done = True if (self.ep_step >= self._max_episode_steps) else False
 
         info = {"reward0":reward,
@@ -188,11 +131,8 @@ class ReacherEnv(object):
         q = np.zeros(self.n)
         for i in range(self.n):
             off = k * self.rang[i]
-            #print('off: ', off)
             q[i] = random.uniform(self.qlim[0, i] + off, self.qlim[1, i] - off)
-            #print('qi', q[i])
-            #print(self.qlim[0, i] + off)
-            #print(self.qlim[1, i] - off)
+
         return q
         
 

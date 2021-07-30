@@ -1,7 +1,6 @@
 import numpy as np
 import cv2
 import time
-#from matplotlib import pyplot as plt
 import scipy.ndimage
 from collections import deque
 
@@ -10,6 +9,7 @@ from collections import deque
 # This should be more reactive than the force method
 
 class P_controller():
+    # Simple controller that can direct the robot towads the goal with no obstacle avoidance
     def __init__(self, env):
         self.fov = 360
         self.Kv = 0.1
@@ -45,9 +45,8 @@ class P_controller():
 
             loc = int(self.clipAngle(goal_bearing + angle))
             attraction_field[loc] = 1 - angle * gradient
-
-        
         return attraction_field
+
 
     def compute_action(self):
 
@@ -72,7 +71,7 @@ class P_controller():
 
 
 class PotentialFieldsController():
-
+    # Reative controller based on the artificial potential fields algorithm
     def __init__(self, env):
         self.fov = 360
         #self.fig, (self.ax1, self.ax2, self.ax3) = plt.subplots(3, 1, sharex=True)
@@ -103,8 +102,6 @@ class PotentialFieldsController():
         #gradient is how sharp the attraction in the map is
         gradient = 1/(self.fov/2)
 
-        #iterate through each angle in the fov map and compute linear relation to goal angle
-        #ie compute ramp profile of map
 
         for angle in range(int(self.fov/2)):
 
@@ -113,12 +110,6 @@ class PotentialFieldsController():
 
             loc = int(self.clipAngle(goal_bearing + angle))
             attraction_field[loc] = 1 - angle * gradient
-
-        # fov_map = np.arange(-self.fov/2, self.fov/2+1)
-        # plt.plot(fov_map, attraction_field)
-        # plt.show(block=False)
-        # plt.pause(0.00000001)
-        # plt.cla()
 
         return attraction_field
 
@@ -157,7 +148,6 @@ class PotentialFieldsController():
         fov_map = np.arange(-self.fov/2, self.fov/2+1)
 
         # Compute a repulsive angular velocity to ensure robot steers away from obstacle
-        #rep_angle = self.fov/2 - np.where(laser_scan == np.min(laser_scan))[0][0]
         omega = -heading * Kw
         
         vel = (10 * Kv) * (1.0 - min(0.8 * abs(omega), 0.95)) 

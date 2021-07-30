@@ -52,15 +52,11 @@ class RRMC_controller():
 
         # Angular velocity error
         ew = eTep.rpy() * np.pi/180
-        #ew = [0,0,0]
 
         # Form error vector
         e = np.r_[ev, ew]
         
         dist = np.array(self.env.agent.get_tip().get_position()) - np.array(self.env.target.get_position())
-        
-        #if np.linalg.norm(dist)<0.02:
-        #    gain = 0
 
         # Desired end-effector velocity
         v = gain * e
@@ -77,36 +73,17 @@ class RRMC_controller():
         pose = SE3(self.env.target.get_position())*SE3.Eul(self.env.target.get_orientation())
         return pose
 
-    def MPC():
-        # MC shooting of potential poses from current pose
-        # Compute the distance to goal for each of them
-        # Find the action which leads to the closest to the goal and return immediate executable action
-        pass
-
 
     def compute_action(self, gain=1):
 
-        #print(self.env.targ)
-        #print(self.panda.fkine())
-        #print()
-
         try:
             self.panda.q = self.env.agent.get_joint_positions()
-            #print(self.panda.q)
-            # v = self.p_servo(self.fkine(), self.target_pose(), gain=gain)
-            print(self.panda.fkine(self.panda.q).t)
-            print('t: ', self.target_pose())
             v = self.p_servo(self.panda.fkine(self.panda.q), self.target_pose(), gain=0.3)
             v[3:] *= 10
-            #print(v)
             action = np.linalg.pinv(self.panda.jacobe(self.panda.q)) @ v
-            #action = np.linalg.pinv(self.env.agent.get_jacobian().T) @ v
-            #print('jessie: ', self.panda.jacobe())
-            #print('pyrep: ', self.env.agent.get_jacobian().T)
-            #action /= self.env.action_limits
+
         except np.linalg.LinAlgError:
             action = np.zeros(self.env.n)
-            #self.env.r.fail = True
             print('Fail')
 
         return action

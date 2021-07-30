@@ -1,14 +1,12 @@
 """ 
 Author: Krishan Rana, SpinningUp
-Project: Guided Policy Optimisation (GPO) 
+Project: Bayesian Controller Fusion
 
 """
 
 import numpy as np
 import torch
 from torch.optim import Adam
-#from torch.utils.tensorboard import SummaryWriter
-#from torch.distributions import Normal
 from torch.distributions.normal import Normal
 import gym
 import time
@@ -24,19 +22,9 @@ import random
 import ray
 
 
-
-HYPERS = collections.OrderedDict()
-def arg(tag, default):
-    HYPERS[tag] = type(default)((sys.argv[sys.argv.index(tag)+1])) if tag in sys.argv else default
-    return HYPERS[tag]
-
-
-PROJECT_LOG = arg("--project_log", "GPO_2021")
-
-ray.init()
-wandb.login()
-wandb.init(project=PROJECT_LOG)
-
+#---------------------------------------------------------------------------------------------------------------------------------------------#
+#--------------------------------------------------------- SAC -------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------------------------------------------------------------------------#
 
 class ReplayBuffer:
     """
@@ -81,7 +69,7 @@ class SAC():
         steps_per_epoch=4000, epochs=100, replay_size=int(1e6), gamma=0.99, 
         polyak=0.995, lr=1e-3, alpha=0.2, beta=0.3, batch_size=100, start_steps=10000, 
         update_after=1000, update_every=50, num_test_episodes=10, max_ep_len=1000, 
-        logger_kwargs=dict(), save_freq=1, use_entropy_loss=True, use_kl_loss=False, use_kl_and_entropy=False, epsilon=1e-5, use_auto_beta=False, use_auto_alpha=False, target_KL_div=0, target_entropy=0.3):
+        logger_kwargs=dict(), save_freq=1, use_entropy_loss=True, use_kl_loss=False, epsilon=1e-5, target_KL_div=0, target_entropy=0.3):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -106,7 +94,6 @@ class SAC():
         self.use_auto_beta = use_auto_beta
         self.target_entropy = target_entropy
         self.a_lr = 3e-4
-        self.counter = 0
 
         # CORE-RL Params
         self.factorC = FACTOR_C
@@ -135,15 +122,13 @@ class SAC():
         self.q_optimizer = Adam(self.q_params, lr=lr)
 
         # Set up automatic KL div temperature tuning for alpha 
-        if self.use_auto_alpha:
-            #self.log_alpha = torch.tensor([[-0.7]], requires_grad=True, device=self.device)
-            #self.alpha_optim = Adam([self.log_alpha], lr=self.a_lr)
-            self.alpha = torch.tensor([[10.0]], requires_grad=True, device=self.device)
-            self.alpha_optim = Adam([self.alpha], lr=self.a_lr)
-        if self.use_auto_beta:
-            self.log_beta = torch.tensor([[-0.01]], requires_grad=True, device=self.device)
-            self.beta = self.log_beta.exp()
-            self.beta_optimizer = Adam([self.log_beta], lr=self.a_lr)
+        self.alpha = torch.tensor([[10.0]], requires_grad=True, device=self.device)
+        self.alpha_optim = Adam([self.alpha], lr=self.a_lr)
+
+        # Set up automatic entropy temperature tuning for beta
+        self.log_beta = torch.tensor([[-0.01]], requires_grad=True, device=self.device)
+        self.beta = self.log_beta.exp()
+        self.beta_optimizer = Adam([self.log_beta], lr=self.a_lr)
 
 
     def compute_loss_q(self, data):
@@ -167,9 +152,7 @@ class SAC():
             if self.use_kl_loss:
                 # KL minimisation regularisation
                 backup = r + self.gamma * (1 - d) * (q_pi_targ - self.alpha * KL_loss)
-            # elif self.use_kl_and_entropy:
-            #     backup = r + self.gamma * (1 - d) * (q_pi_targ - self.alpha * KL_loss - self.beta * logp_a2)
-            elif self.use_entropy_loss:
+            else:
                 # Maximum entropy backup
                 backup = r + self.gamma * (1 - d) * (q_pi_targ - self.beta * logp_a2)
                 
@@ -193,9 +176,7 @@ class SAC():
         if self.use_kl_loss:
             # Entropy-regularized policy loss
             loss_pi = (self.alpha * KL_loss - q_pi).mean()
-        # elif self.use_kl_and_entropy:
-        #     loss_pi = (self.alpha * KL_loss + self.beta * logp_pi - q_pi).mean()
-        elif self.use_entropy_loss:
+        else:
             loss_pi = (self.beta * logp_pi - q_pi).mean()
             
         return loss_pi, logp_pi, KL_loss
@@ -232,27 +213,18 @@ class SAC():
                 p_targ.data.mul_(self.polyak)
                 p_targ.data.add_((1 - self.polyak) * p.data)
 
-        # Update counter
-        self.counter += 1
+        # KL temperature update
+        alpha_loss = self.alpha * (self.target_KL_div - KL_div).detach().mean()
+        self.alpha_optim.zero_grad()
+        alpha_loss.backward()
+        self.alpha_optim.step()
 
-
-        if self.use_auto_alpha:
-            # Update temperature
-            #alpha_loss = self.alpha * min(0.0, (self.target_KL_div - KL_div).detach().mean())
-            alpha_loss = self.alpha * (self.target_KL_div - KL_div).detach().mean()
-            self.alpha_optim.zero_grad()
-            alpha_loss.backward()
-            self.alpha_optim.step()
-
- 
-        if self.use_auto_beta:
-            # Update temperature
-            self.beta_optimizer.zero_grad()
-            beta_loss = (-self.log_beta * (self.target_entropy + logp_pi).detach()).mean()
-            #beta_loss = (self.beta * (self.target_entropy - logp_pi).detach()).mean()
-            beta_loss.backward()
-            self.beta_optimizer.step()
-            self.beta = self.log_beta.exp()
+        # Entropy temperature update
+        self.beta_optimizer.zero_grad()
+        beta_loss = (-self.log_beta * (self.target_entropy + logp_pi).detach()).mean()
+        beta_loss.backward()
+        self.beta_optimizer.step()
+        self.beta = self.log_beta.exp()
 
         
         # Record things
@@ -271,7 +243,9 @@ class SAC():
         return act, mu, std
 
 
-#--------------------------------------------------------- Functions -------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------------------------------------------------------------------------#
+#--------------------------------------------------------- Helpers ---------------------------------------------------------------------------#
+#---------------------------------------------------------------------------------------------------------------------------------------------#
 
 def test_agent(use_single_agent=True):
       
@@ -291,12 +265,10 @@ def test_agent(use_single_agent=True):
             else:
                 # Take deterministic actions at test time
                 if use_single_agent:
-                    #agent = random.choice(agents)
                     agent = agents[0]
                     action, mu, sigma = agent.get_action(o, True)
                 else:
                     ensemble_actions = ray.get([get_distr.remote(o,p.ac) for p in agents])
-                    #mu, sigma = fuse_ensembles_deterministic(ensemble_actions)
                     mu, sigma = fuse_ensembles_stochastic(ensemble_actions)
                     dist = Normal(torch.tensor(mu.detach()), torch.tensor(sigma.detach()))
                     action = torch.tanh(dist.sample()).numpy()
@@ -317,6 +289,7 @@ def test_agent(use_single_agent=True):
     return {'rewards_eval': avg_ret,
             'len_eval': avg_len}
 
+
 def evaluate_prior_agent():
 
     ep_ret = 0.0
@@ -335,12 +308,11 @@ def evaluate_prior_agent():
     return {'rewards_eval': avg_ret,
             'len_eval': avg_len}
                     
-def fuse_controllers(prior_mu, prior_sigma, policy_mu, policy_sigma, zeta):
+def fuse_controllers(prior_mu, prior_sigma, policy_mu, policy_sigma):
     # The policy mu and sigma are from the stochastic SAC output
     # The sigma from prior is fixed
-    zeta2 = 1.0-zeta
-    mu = (np.power(policy_sigma, 2) * zeta * prior_mu + np.power(prior_sigma,2) * zeta2 * policy_mu)/(np.power(policy_sigma,2) * zeta + np.power(prior_sigma,2) * zeta2)
-    sigma = np.sqrt((np.power(prior_sigma,2) * np.power(policy_sigma,2))/(np.power(policy_sigma,2) * zeta + np.power(prior_sigma,2) * zeta2))
+    mu = (np.power(policy_sigma, 2) * prior_mu + np.power(prior_sigma,2) * policy_mu)/(np.power(policy_sigma,2) * + np.power(prior_sigma,2))
+    sigma = np.sqrt((np.power(prior_sigma,2) * np.power(policy_sigma,2))/(np.power(policy_sigma,2) + np.power(prior_sigma,2)))
     return mu, sigma
 
 def inverse_sigmoid_gating_function(k, C, x):
@@ -378,8 +350,10 @@ def save_ensemble():
     for idx, agnt in enumerate(agents):
         torch.save(agnt.ac.pi, save_dir + wandb.run.name + "_" + str(idx) + ".pth")
 
-#--------------------------------------------------------- Run -------------------------------------------------------------------------------#
 
+#---------------------------------------------------------------------------------------------------------------------------------------------#
+#--------------------------------------------------------- Run -------------------------------------------------------------------------------#
+#---------------------------------------------------------------------------------------------------------------------------------------------#
 
 def run(agents, env):
 
@@ -412,7 +386,7 @@ def run(agents, env):
                 with torch.no_grad():
                     act_b, _, _, _ = agent.ac.pi(torch.as_tensor(o_old, dtype=torch.float32).to(agent.device), True, False)
                     base_q  = agent.ac.q1(torch.as_tensor(o_old, dtype=torch.float32).to(agent.device), act_b).cpu().numpy()
-                    
+            
                     act_t, _, _, _ = agent.ac.pi(torch.as_tensor(o, dtype=torch.float32).to(agent.device), True, False)
                     target_q = agent.ac.q1(torch.as_tensor(o, dtype=torch.float32).to(agent.device), act_t).cpu().numpy()
                 # Compute lambda from measured td-error
@@ -420,31 +394,22 @@ def run(agents, env):
                 lambda_mix = agent.lambda_max*(1 - np.exp(-agent.factorC * np.abs(td_error)))
                 # Compute the combined action
                 a = policy_action/(1+lambda_mix) + (lambda_mix/(1+lambda_mix))*mu_prior
-                #a = np.clip(a, -1, 1)
                 write_logs({'lambda_mix':lambda_mix}, total_steps)
                 write_logs({'td_error':td_error}, total_steps)
                 
 
-            if METHOD == "MCF":
+            if METHOD == "BCF":
 
-                if USE_ENSEMBLE:
-                    ensemble_actions = ray.get([get_distr.remote(o,p.ac) for p in agents])
-                    #mu_ensemble, sigma_ensemble = fuse_ensembles_deterministic(ensemble_actions)
-                    
-                    mu_ensemble, sigma_ensemble = fuse_ensembles_stochastic(ensemble_actions)
-                    mu_mcf, std_mcf = fuse_controllers(mu_prior, sigma_prior, mu_ensemble.cpu().numpy(), sigma_ensemble.cpu().numpy(), 0.5)
-                    
-                    write_logs({'std_ensemble_lin_vel':sigma_ensemble[0]}, total_steps)
-                    write_logs({'std_ensemble_ang_vel':sigma_ensemble[1]}, total_steps)
-                    
-                else:
-                    zeta = inverse_sigmoid_gating_function(0.00005, 300000, t)
-                    mu_mcf, std_mcf = fuse_controllers(mu_prior, sigma_prior, mu_policy.cpu().numpy(), std_policy.cpu().numpy(), zeta)
-                    write_logs({'zeta': zeta}, total_steps)
-
+                ensemble_actions = ray.get([get_distr.remote(o,p.ac) for p in agents])
+                mu_ensemble, sigma_ensemble = fuse_ensembles_stochastic(ensemble_actions)
+                mu_mcf, std_mcf = fuse_controllers(mu_prior, sigma_prior, mu_ensemble.cpu().numpy(), sigma_ensemble.cpu().numpy())
+                
                 dist_hybrid = Normal(torch.tensor(mu_mcf).double().detach(), torch.tensor(std_mcf).double().detach())
                 a = dist_hybrid.sample()
                 a = torch.tanh(a).numpy()
+
+                write_logs({'std_ensemble_lin_vel':sigma_ensemble[0]}, total_steps)
+                write_logs({'std_ensemble_ang_vel':sigma_ensemble[1]}, total_steps)
                 write_logs({'std_mcf_lin_vel':std_mcf[0]}, total_steps)
 
             if METHOD == "residual":
@@ -504,37 +469,45 @@ def run(agents, env):
             
             o, ep_ret, ep_len, r = env.reset(), 0, 0, 0
             agent = random.choice(agents)
-            
-            
 
+
+
+#---------------------------------------------------------------------------------------------------------------------------------------------#
+#--------------------------------------------------------- Setup -----------------------------------------------------------------------------#
+#---------------------------------------------------------------------------------------------------------------------------------------------#
+
+
+PROJECT_LOG = arg("--project_log", "GPO_2021")
+ray.init()
+wandb.login()
+wandb.init(project=PROJECT_LOG)            
+            
+HYPERS = collections.OrderedDict()
+def arg(tag, default):
+    HYPERS[tag] = type(default)((sys.argv[sys.argv.index(tag)+1])) if tag in sys.argv else default
+    return HYPERS[tag]
 
 TASK = arg("--task", "navigation")
 ENV = arg("--env", "PandaReacher" if TASK == "manipulation" else "PointGoalNavigation")
-METHOD = arg("--method", "MCF") # Options: policy, MCF, residual
+METHOD = arg("--method", "BCF") # Options: policy, BCF, residual, CORE-RL
 REWARD = arg("--reward", "sparse") 
 USE_KL = arg("--use_kl", int(False))
-USE_ENTROPY = arg("--use_entropy", int(True))
-USE_KL_AND_ENTROPY = arg("--use_kl_and_entropy", int(False))
-ALPHA = arg("--alpha", 5 if TASK == "manipulation" else 0.5) #0.01 #0.05 # KL temperature term
-BETA = arg("--beta", 0.01 if TASK == "manipulation" else 0.1) #0.01 #0.05 # Entropy temperature term
+ALPHA = arg("--alpha", 5 if TASK == "manipulation" else 0.5) 
+BETA = arg("--beta", 0.01 if TASK == "manipulation" else 0.1) 
 EPSILON = arg("--epsilon", 2e-4)
 SEED = arg("--seed", 0)
-NUM_AGENTS = arg("--num_agents", 5)
+NUM_AGENTS = arg("--num_agents", 5) # Number of agents in ensemble
 NUM_STEPS = arg("--num_steps", int(1e6))
-USE_ENSEMBLE = arg("--use_ensemble", int(False))
-USE_AUTO_ALPHA = arg("--use_auto_alpha", int(False))
-USE_AUTO_BETA = arg("--use_auto_beta", int(False))
 TARGET_KL_DIV = arg("--target_kl_div", 10e-3)
 TARGET_ENTROPY = arg("--target_entropy", -8.0 if TASK == "manipulation" else -7)
 SIGMA_PRIOR = arg("--sigma_prior", 0.4 if TASK == "manipulation" else 0.4)
-EVAL_SINGLE_AGENT = arg("--eval_single_agent", 1)
 PRIOR_METHOD = arg("--prior_method", "APF")
+# CORE-RL parameters
 LAMBDA_MAX = arg("--lambda_max", 15.0)
 FACTOR_C = arg("--factorC", 0.3)
 
 
-
-wandb.run.name = TASK + "_" + "SEED:" + str(SEED) + "_" + METHOD +  "_" "USE_ENSEMBLE:" + str(USE_ENSEMBLE) + "_" + time.asctime().replace(' ', '_')
+wandb.run.name = TASK + "_" + "SEED:" + str(SEED) + "_" + METHOD + "_" + time.asctime().replace(' ', '_')
 
 save_dir = "saved_models/" + wandb.run.name + "/"
 os.mkdir(save_dir)
@@ -547,18 +520,13 @@ random.seed(SEED)
 wandb.config.update(HYPERS)
 
 if TASK == "manipulation":
-    # PyRep
     from manipulation.PandaReacher import ReacherEnv
     from manipulation.prior_controller import RRMC_controller
     max_ep_steps = 1000
-    # Swift
-    #from manipulation.SwiftPandaReacher import ReacherEnv
-    #from manipulation.prior_controller_swift import RRMC_controller
-    #max_ep_steps = 225
-    
     env = ReacherEnv(headless=True, dense = True if REWARD == "dense" else False, max_ep_steps=max_ep_steps)
     prior = RRMC_controller(env)
     sigma_prior = SIGMA_PRIOR
+
 elif TASK == "navigation":
     from navigation.PointGoalNavigationEnv import PointGoalNavigation
     from navigation.prior_controller import PotentialFieldsController
@@ -577,14 +545,12 @@ elif TASK == "navigation":
     sigma_prior = SIGMA_PRIOR
 
 
-
 env.seed(SEED)
 obs_dim = env.observation_space.shape
 act_dim = env.action_space.shape[0]
 replay_buffer = ReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=int(1e6))
 total_steps = 0
 test_steps = 0
-
 
 # Initialise an ensemble of agents
 agents = [SAC(lambda:env,
@@ -601,9 +567,6 @@ agents = [SAC(lambda:env,
             epsilon=EPSILON,
             use_entropy_loss=USE_ENTROPY,
             use_kl_loss=USE_KL,
-            use_kl_and_entropy=USE_KL_AND_ENTROPY,
-            use_auto_alpha=USE_AUTO_ALPHA,
-            use_auto_beta=USE_AUTO_BETA,
             target_entropy=TARGET_ENTROPY,
             target_KL_div=TARGET_KL_DIV) for _ in range(NUM_AGENTS)]
 
