@@ -13,3 +13,28 @@ conda env create --file env_requirements.yml/
 For the manipuliabity maximising reacher task, you will additionally require PyRep and CoppeliaSim. Head to the 
 [PyRep github](https://github.com/stepjam/PyRep) page for installation instructions for this environment. 
 
+
+### Usage
+
+The complete training pipeline for BCF and the baselines compared in this work are provides in 'main.py'. The file allows for several input arguments to allow the user to specify the task, algorithm, prior controller, and the respective hyperparameters. 
+
+```
+python3 main.py --task "navigation" --method "BCF" --prior_controller "APF" --sigma_prior 0.4 --num_agents 10
+```
+
+### Logging
+
+All results are logged using [Weights and Biases](https://wandb.ai). An account and initial login is required to initialise logging as described on thier website.
+
+### Citation
+
+'''
+@article{rana2021bayesian,
+  title={Bayesian Controller Fusion: Leveraging Control Priors in Deep Reinforcement Learning for Robotics},
+  author={Rana, Krishan and Dasagi, Vibhavari and Haviland, Jesse and Talbot, Ben and Milford, Michael and S{\"u}nderhauf, Niko},
+  journal={arXiv preprint arXiv:2107.09822},
+  year={2021}
+}
+'''
+
+
