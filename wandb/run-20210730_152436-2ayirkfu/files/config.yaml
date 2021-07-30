@@ -1,0 +1,73 @@
+wandb_version: 1
+
+_wandb:
+  desc: null
+  value:
+    cli_version: 0.11.1
+    framework: torch
+    is_jupyter_run: false
+    is_kaggle_kernel: false
+    python_version: 3.6.7
+    t:
+      1:
+      - 1
+      2:
+      - 1
+      4: 3.6.7
+      5: 0.11.1
+      8:
+      - 5
+alpha:
+  desc: null
+  value: 0.5
+beta:
+  desc: null
+  value: 0.1
+env:
+  desc: null
+  value: PointGoalNavigation
+epsilon:
+  desc: null
+  value: 0.0002
+factorC:
+  desc: null
+  value: 0.3
+lambda_max:
+  desc: null
+  value: 15.0
+method:
+  desc: null
+  value: BCF
+num_agents:
+  desc: null
+  value: 5
+num_steps:
+  desc: null
+  value: 1000000
+prior_method:
+  desc: null
+  value: APF
+project_log:
+  desc: null
+  value: GPO_2021
+reward:
+  desc: null
+  value: sparse
+seed:
+  desc: null
+  value: 0
+sigma_prior:
+  desc: null
+  value: 0.4
+target_entropy:
+  desc: null
+  value: -7
+target_kl_div:
+  desc: null
+  value: 0.01
+task:
+  desc: null
+  value: navigation
+use_kl:
+  desc: null
+  value: 0

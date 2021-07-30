@@ -69,7 +69,7 @@ class SAC():
         steps_per_epoch=4000, epochs=100, replay_size=int(1e6), gamma=0.99, 
         polyak=0.995, lr=1e-3, alpha=0.2, beta=0.3, batch_size=100, start_steps=10000, 
         update_after=1000, update_every=50, num_test_episodes=10, max_ep_len=1000, 
-        logger_kwargs=dict(), save_freq=1, use_entropy_loss=True, use_kl_loss=False, epsilon=1e-5, target_KL_div=0, target_entropy=0.3):
+        logger_kwargs=dict(), save_freq=1, use_kl_loss=False, epsilon=1e-5, target_KL_div=0, target_entropy=0.3):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -87,11 +87,7 @@ class SAC():
         self.update_after = update_after
         self.steps_per_epoch = steps_per_epoch
         self.use_kl_loss = use_kl_loss
-        self.use_kl_and_entropy = use_kl_and_entropy
-        self.use_entropy_loss = use_entropy_loss
-        self.use_auto_alpha = use_auto_alpha
         self.target_KL_div = target_KL_div
-        self.use_auto_beta = use_auto_beta
         self.target_entropy = target_entropy
         self.a_lr = 3e-4
 
@@ -262,21 +258,19 @@ def test_agent(use_single_agent=True):
                 act_policy, mu, sigma = agents[0].get_action(o, True)
                 act_prior = prior.compute_action()
                 action = np.clip(act_prior + act_policy, -1, 1)
+            elif METHOD == "BCF":
+                ensemble_actions = ray.get([get_distr.remote(o,p.ac) for p in agents])
+                mu, sigma = fuse_ensembles_stochastic(ensemble_actions)
+                dist = Normal(torch.tensor(mu.detach()), torch.tensor(sigma.detach()))
+                action = torch.tanh(dist.sample()).numpy()
+                wandb.log({'ensemble_std_lin_vel': sigma[0],
+                'ensemble_std_ang_vel': sigma[1],
+                'ensemble_mu_lin_vel': mu[0],
+                'ensemble_mu_ang_vel': mu[1]}, total_steps)
             else:
-                # Take deterministic actions at test time
-                if use_single_agent:
-                    agent = agents[0]
-                    action, mu, sigma = agent.get_action(o, True)
-                else:
-                    ensemble_actions = ray.get([get_distr.remote(o,p.ac) for p in agents])
-                    mu, sigma = fuse_ensembles_stochastic(ensemble_actions)
-                    dist = Normal(torch.tensor(mu.detach()), torch.tensor(sigma.detach()))
-                    action = torch.tanh(dist.sample()).numpy()
-                    wandb.log({'ensemble_std_lin_vel': sigma[0],
-                            'ensemble_std_ang_vel': sigma[1],
-                            'ensemble_mu_lin_vel': mu[0],
-                            'ensemble_mu_ang_vel': mu[1]}, total_steps)
-
+                agent = agents[0]
+                action, mu, sigma = agent.get_action(o, True)
+                
             wandb.log({'test_steps': test_steps}, total_steps)
             o, r, d, _ = agents[0].test_env.step(action)
             ep_ret += r
@@ -349,6 +343,10 @@ def write_logs(logs, t):
 def save_ensemble():
     for idx, agnt in enumerate(agents):
         torch.save(agnt.ac.pi, save_dir + wandb.run.name + "_" + str(idx) + ".pth")
+
+def arg(tag, default):
+    HYPERS[tag] = type(default)((sys.argv[sys.argv.index(tag)+1])) if tag in sys.argv else default
+    return HYPERS[tag]
 
 
 #---------------------------------------------------------------------------------------------------------------------------------------------#
@@ -450,13 +448,11 @@ def run(agents, env):
                 batch = replay_buffer.sample_batch(agent.batch_size)
                 metrics = ag.update(batch)
             write_logs(metrics, total_steps)
-            if agents[0].use_auto_alpha: write_logs({'alpha': agents[0].alpha.cpu().item()}, total_steps)
-            if agents[0].use_auto_beta: write_logs({'beta': agents[0].beta.cpu().item()}, total_steps)
-
+     
         # End of epoch handling
         if (t+1) % agent.steps_per_epoch == 0:
             # Test the performance of the deterministic version of the agent.
-            metrics = test_agent(use_single_agent=EVAL_SINGLE_AGENT)
+            metrics = test_agent()
             write_logs(metrics, total_steps)
             save_ensemble()
 
@@ -476,36 +472,32 @@ def run(agents, env):
 #--------------------------------------------------------- Setup -----------------------------------------------------------------------------#
 #---------------------------------------------------------------------------------------------------------------------------------------------#
 
-
+HYPERS = collections.OrderedDict()
 PROJECT_LOG = arg("--project_log", "GPO_2021")
 ray.init()
 wandb.login()
 wandb.init(project=PROJECT_LOG)            
             
-HYPERS = collections.OrderedDict()
-def arg(tag, default):
-    HYPERS[tag] = type(default)((sys.argv[sys.argv.index(tag)+1])) if tag in sys.argv else default
-    return HYPERS[tag]
-
 TASK = arg("--task", "navigation")
-ENV = arg("--env", "PandaReacher" if TASK == "manipulation" else "PointGoalNavigation")
 METHOD = arg("--method", "BCF") # Options: policy, BCF, residual, CORE-RL
 REWARD = arg("--reward", "sparse") 
 USE_KL = arg("--use_kl", int(False))
-ALPHA = arg("--alpha", 5 if TASK == "manipulation" else 0.5) 
-BETA = arg("--beta", 0.01 if TASK == "manipulation" else 0.1) 
+ALPHA = arg("--alpha", 0.5) 
+BETA = arg("--beta", 0.1) 
 EPSILON = arg("--epsilon", 2e-4)
 SEED = arg("--seed", 0)
 NUM_AGENTS = arg("--num_agents", 5) # Number of agents in ensemble
 NUM_STEPS = arg("--num_steps", int(1e6))
 TARGET_KL_DIV = arg("--target_kl_div", 10e-3)
-TARGET_ENTROPY = arg("--target_entropy", -8.0 if TASK == "manipulation" else -7)
-SIGMA_PRIOR = arg("--sigma_prior", 0.4 if TASK == "manipulation" else 0.4)
-PRIOR_METHOD = arg("--prior_method", "APF")
+TARGET_ENTROPY = arg("--target_entropy", -7)
+SIGMA_PRIOR = arg("--sigma_prior", 0.4)
+PRIOR_CONTROLLER = arg("--prior_controller", "APF")
 # CORE-RL parameters
 LAMBDA_MAX = arg("--lambda_max", 15.0)
 FACTOR_C = arg("--factorC", 0.3)
 
+ENV = "PandaReacher" if TASK == "manipulation" else "PointGoalNavigation"
+NUM_AGENTS = NUM_AGENTS if METHOD == "BCF" else 1
 
 wandb.run.name = TASK + "_" + "SEED:" + str(SEED) + "_" + METHOD + "_" + time.asctime().replace(' ', '_')
 
@@ -538,9 +530,9 @@ elif TASK == "navigation":
         reward_type  = REWARD)
     for k,v in HYPERS.items(): exec("{} = {!r}".format(k,v))
     env = PointGoalNavigation(**HYPERS)
-    if PRIOR_METHOD == "APF":
+    if PRIOR_CONTROLLER == "APF":
         prior = PotentialFieldsController(env)
-    if PRIOR_METHOD == "P_controller":
+    if PRIOR_CONTROLLER == "P_controller":
         prior = P_controller(env)
     sigma_prior = SIGMA_PRIOR
 
@@ -565,7 +557,6 @@ agents = [SAC(lambda:env,
             alpha=ALPHA,
             beta=BETA,
             epsilon=EPSILON,
-            use_entropy_loss=USE_ENTROPY,
             use_kl_loss=USE_KL,
             target_entropy=TARGET_ENTROPY,
             target_KL_div=TARGET_KL_DIV) for _ in range(NUM_AGENTS)]
