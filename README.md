@@ -19,6 +19,8 @@ For the manipuliabity maximising reacher task, you will additionally require PyR
 The complete training pipeline for BCF and the baselines compared in this work are provides in 'main.py'. The file allows for several input arguments to allow the user to specify the task, algorithm, prior controller, and the respective hyperparameters. 
 
 ```
+git clone https://github.com/krishanrana/bcf.git
+cd bcf
 python3 main.py --task "navigation" --method "BCF" --prior_controller "APF" --sigma_prior 0.4 --num_agents 10
 ```
 
