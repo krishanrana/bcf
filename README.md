@@ -7,6 +7,8 @@ A hybrid control strategy for combining deep RL and classical robotic controller
 The only requirement is that you have [Conda installed](https://conda.io/projects/conda/en/latest/user-guide/install/index.html) on your system, and [NVIDIA drivers installed](https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&=Ubuntu&target_version=20.04&target_type=deb_network) if you want CUDA acceleration. To install all the required python dependencies run the following command within conda.
 
 ```
+git clone https://github.com/krishanrana/bcf.git
+cd bcf
 conda env create --file env_requirements.yml/
 ```
 
@@ -19,8 +21,6 @@ For the manipuliabity maximising reacher task, you will additionally require PyR
 The complete training pipeline for BCF and the baselines compared in this work are provides in 'main.py'. The file allows for several input arguments to allow the user to specify the task, algorithm, prior controller, and the respective hyperparameters. 
 
 ```
-git clone https://github.com/krishanrana/bcf.git
-cd bcf
 python3 main.py --task "navigation" --method "BCF" --prior_controller "APF" --sigma_prior 0.4 --num_agents 10
 ```
 
