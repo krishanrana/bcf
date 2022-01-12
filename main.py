@@ -305,7 +305,7 @@ def evaluate_prior_agent():
 def fuse_controllers(prior_mu, prior_sigma, policy_mu, policy_sigma):
     # The policy mu and sigma are from the stochastic SAC output
     # The sigma from prior is fixed
-    mu = (np.power(policy_sigma, 2) * prior_mu + np.power(prior_sigma,2) * policy_mu)/(np.power(policy_sigma,2) * + np.power(prior_sigma,2))
+    mu = (np.power(policy_sigma, 2) * prior_mu + np.power(prior_sigma,2) * policy_mu)/(np.power(policy_sigma,2) + np.power(prior_sigma,2))
     sigma = np.sqrt((np.power(prior_sigma,2) * np.power(policy_sigma,2))/(np.power(policy_sigma,2) + np.power(prior_sigma,2)))
     return mu, sigma
 
