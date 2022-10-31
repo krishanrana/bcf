@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 
-A hybrid control strategy for combining deep RL and classical robotic controllers. We provide two environments for both navigation and reaching tasks. For each task, we additionally provide traditional handcrafted controllers that can solve part of the task, however are not the optimal solution. Visit our [project page](https://krishanrana.github.io/bcf) for more information and video demonstrations.
+[CoRL 2022] A hybrid control strategy for combining deep RL and classical robotic controllers. We provide two environments for both navigation and reaching tasks. For each task, we additionally provide traditional handcrafted controllers that can solve part of the task, however are not the optimal solution. Visit our [project page](https://krishanrana.github.io/bcf) for more information and video demonstrations.
 
 ### Installation
 
